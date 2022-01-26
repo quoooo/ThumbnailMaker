@@ -85,6 +85,8 @@ class TxtData:
 
         self.rectangle = d.textbbox((self.padding_sides, total_top_padding), font=fnt, text=self.text)
 
+        # d.rectangle(self.rectangle)
+
         self.image = txt_img
 
     def text_sizer(self, text, canvas_width):
@@ -127,43 +129,52 @@ class TxtData:
 
 
 def overlay_all(txt_imgs, overlay_img, bg_img, bg_location, out=None):
-    out = Image.new("RGB", (1280,720), 0)
-    out.paste(bg_img.copy().resize((1280, 720)), bg_location)
+    if out is None:
+        out = Image.new("RGBA", (1280, 720), (0, 0, 0, 0))
 
-    out.paste(overlay_img, (0, 0), overlay_img)
+    if bg_img is None:
+        out.paste(overlay_img)
+    else:
+        bg_w = resizer(bg_img)
+        bg_img = bg_img.resize((bg_w, 720))
+        out.paste(bg_img.copy(), bg_location)
+        out.alpha_composite(overlay_img)
 
-    for image in txt_imgs:
-        out.paste(image.image, image.location, image.image)
+    for img in txt_imgs:
+        out.alpha_composite(img.image)
 
     return out
 
 
-# def preview()
-
-def main():
-    # create text data
-    txt_top_img = TxtData("Pupperazzi", 125, Order.TOP, 7, 10, True)
-    # txt_top_img = TxtData("A B C Alphabet!!!!!", 125, Order.TOP, 7, 10, True)
-    txt_mid_img = TxtData("Any% Speedrun", 50, Order.MID, 5, 10, True)
-    txt_bot_img = TxtData("3:30", 125, Order.BOT, 5, 10)
-
+def get_overlay_img():
     try:
-        overlay_img = Image.open('bkgrnd.png')
+        img = Image.open('bkgrnd.png')
+        return img
     except OSError:
         print("== ERROR ==\nimage not found\n")
         raise
 
+
+#resize image to proper height while maintaining aspect ratio
+def resizer(img):
+    ratio = 720/img.size[1]
+    return int(ratio * img.size[0])
+
+def main():
+    # create text data
+    txt_top_img = TxtData("testing", 125, Order.TOP, 7, 10, True)
+    # txt_top_img = TxtData("A B C Alphabet!!!!!", 125, Order.TOP, 7, 10, True)
+    txt_mid_img = TxtData("hola", 50, Order.MID, 5, 10, True)
+    txt_bot_img = TxtData("0:00:00", 125, Order.BOT, 5, 10)
+
+    overlay_img = get_overlay_img()
+
+    # create text images
     txt_top_img.text_shaper(overlay_img)
     txt_bot_img.text_shaper(overlay_img)
-
     rectangles = (txt_top_img.rectangle, txt_bot_img.rectangle)
-
     txt_mid_img.text_shaper(overlay_img, rectangles)
-
     images = [txt_top_img, txt_mid_img, txt_bot_img]
-
-    # create final output image
-    # out = Image.new("RGB", (1280, 720), 0)
 
     # load bg image, if no image exists create black image
     # TODO grab image some other way
@@ -184,10 +195,9 @@ def main():
         # thumbnail.show()
         finalized = True
 
-    # out = Image.new("RGB", (1280, 720), 0)
     out = overlay_all(images, overlay_img, game_img, (250, 0))
     out.show()
-    out.save(fp='./Images/output.png')
+    # out.save(fp='./Images/output.png')
 
 
 if __name__ == '__main__':
