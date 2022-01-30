@@ -1,6 +1,5 @@
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from enum import Enum
-import urllib.request
 
 
 class Order(Enum):
@@ -9,9 +8,17 @@ class Order(Enum):
     BOT = 3
 
 
+class Align(Enum):
+    LEFT = 'Left'
+    CENTER = 'Center'
+    RIGHT = 'Right'
+
+
 class TxtData:
-    def __init__(self, text, max_txt_size, order, max_size_fraction,
-                 shadow_distance=-1, multiline=False, rectangle=None, location=(0, 0), image=None):
+    def __init__(self, text, max_txt_size, order, max_size_fraction, font,
+                 shadow_distance=-1, multiline=False, fill_colour=(247, 200, 37),
+                 stroke_colour=(125, 39, 125), stroke_size=5, alignment=Align.LEFT, padding=(0, 0, 0, 0),
+                 location=(0, 0), rectangle=None, image=None):
         # TODO load default data from .json
         self.text = text
         self.max_txt_size = max_txt_size
@@ -22,17 +29,12 @@ class TxtData:
         self.rectangle = rectangle
         self.location = location
         self.image = image
-
-        # hard coded for now
-        self.padding_top = 88
-        self.padding_bot = 88
-        self.padding_sides = 88
-        # TODO text alignment
-        # TODO search font in folder, else use basic font
-        self.this_font = "PoetsenOne-Regular.ttf"
-        # self.this_font = "ariblk.ttf"
-        self.fill_colour = (247, 200, 37)  # yellow
-        self.stroke_colour = (125, 39, 125)  # purple
+        self.this_font = font
+        self.fill_colour = fill_colour  # yellow
+        self.stroke_colour = stroke_colour  # purple
+        self.stroke_size = stroke_size
+        self.alignment = alignment
+        self.padding_left, self.padding_top, self.padding_right, self.padding_bot = padding
 
     def text_shaper(self, canvas_size, rectangles=None):
         # if it is a multiline text, there are no new line chars, and the width of max text size > max width allowed
@@ -48,9 +50,21 @@ class TxtData:
 
         # get the height and the size of the ascender - https://en.wikipedia.org/wiki/Ascender_(typography)
         # needed for correctly spacing things later
-        h = d.textbbox((0, 0), font=fnt, text=self.text)[3] - d.textbbox((0, 0), font=fnt, text=self.text)[1]
-        ascender = d.textbbox((0, 0), font=fnt, text=self.text)[1]
+        left, up, right, down = d.textbbox((0, 0), font=fnt, text=self.text)
+        h = down - up
+        w = right - left
+        ascender = up
 
+        # get X coordinate
+        total_left_padding = 0
+        if self.alignment == Align.LEFT.value:
+            total_left_padding = self.padding_left
+        elif self.alignment == Align.RIGHT.value:
+            total_left_padding = canvas_size.size[0] - self.padding_right - w
+        elif self.alignment == Align.CENTER.value:
+            total_left_padding = int(canvas_size.size[0]/2) - self.padding_right + self.padding_left - int(w/2)
+
+        # get Y coordinate
         total_top_padding = 0
         if self.order == Order.TOP:
             total_top_padding = self.padding_top - ascender
@@ -64,9 +78,9 @@ class TxtData:
                 all this should place middle box perfectly between top and bottom
                 '''
                 total_top_padding = rectangles[0][3] \
-                                + (round((rectangles[1][1] - rectangles[0][3]) / 2)) \
-                                - round(h / 2) \
-                                - ascender
+                                    + (round((rectangles[1][1] - rectangles[0][3]) / 2)) \
+                                    - round(h / 2) \
+                                    - ascender
             else:
                 total_top_padding = round(canvas_size.size[1] / 2) - round(h / 2) - round(ascender / 2)
         elif self.order == Order.BOT:
@@ -74,16 +88,16 @@ class TxtData:
 
         if self.shadow_distance >= 0:
             # draw the shadow
-            d.multiline_text((self.padding_sides + self.shadow_distance, total_top_padding + self.shadow_distance),
+            d.multiline_text((total_left_padding + self.shadow_distance, total_top_padding + self.shadow_distance),
                              self.text, font=fnt, fill=(0, 0, 0, 75))
             txt_img = txt_img.filter(ImageFilter.GaussianBlur(6))
 
         # draw the text
         d = ImageDraw.Draw(txt_img)
-        d.multiline_text((self.padding_sides, total_top_padding), self.text, font=fnt, fill=self.fill_colour,
-                         stroke_width=5, stroke_fill=self.stroke_colour)
+        d.multiline_text((total_left_padding, total_top_padding), self.text, font=fnt, fill=self.fill_colour,
+                         stroke_width=self.stroke_size, stroke_fill=self.stroke_colour)
 
-        self.rectangle = d.textbbox((self.padding_sides, total_top_padding), font=fnt, text=self.text)
+        self.rectangle = d.textbbox((total_left_padding, total_top_padding), font=fnt, text=self.text)
 
         # d.rectangle(self.rectangle)
 
@@ -99,31 +113,44 @@ class TxtData:
                 temp_w = font.getbbox(line)[2]
                 if temp_w > w:
                     w = temp_w
-            if w > round(canvas_width * self.max_size_fraction / 12) - self.padding_sides:
+            if (w > round(canvas_width * self.max_size_fraction / 12) - self.padding_left) \
+                    and self.alignment == Align.LEFT.value:
+                break
+            elif (w > round(canvas_width * self.max_size_fraction / 12) - self.padding_right) \
+                    and self.alignment == Align.RIGHT.value:
+                break
+            elif (w > round(canvas_width * self.max_size_fraction / 12) - self.padding_right - self.padding_left) \
+                    and self.alignment == Align.CENTER.value:
                 break
             selected_size = new_size
 
+        # print(selected_size, text)
         return selected_size
 
     def multiliner(self, canvas_width):
         total_width = ImageFont.truetype(self.this_font, self.max_txt_size).getbbox(self.text)[2]
-        max_width = round(canvas_width * self.max_size_fraction / 12) - self.padding_sides
+
+        if self.alignment == Align.LEFT.value:
+            max_width = round(canvas_width * self.max_size_fraction / 12) - self.padding_left
+        elif self.alignment == Align.RIGHT.value:
+            max_width = round(canvas_width * self.max_size_fraction / 12) - self.padding_right
+        else:
+            max_width = round(canvas_width * self.max_size_fraction / 12) - self.padding_left - self.padding_right
 
         if self.multiline and '\n' not in self.text and total_width > max_width:
             wordlist = self.text.split()
             centerer = 0, 0
+            max_size = 1
             for x in range(len(wordlist)):
                 str1 = ' '.join(wordlist[:x + 1])
                 str2 = ' '.join(wordlist[x + 1:])
-                segment_width = ImageFont.truetype(self.this_font, self.max_txt_size).getbbox(str1)[2]
-                if segment_width > max_width:
-                    current = min(self.text_sizer(str1, canvas_width), self.text_sizer(str2, canvas_width))
-                    past = min(self.text_sizer(centerer[0], canvas_width), self.text_sizer(centerer[1], canvas_width))
-                    if current > past:
-                        centerer = str1, str2
-                    break
-                else:
+
+                local = min(self.text_sizer(str1, canvas_width), self.text_sizer(str2, canvas_width))
+                if local > max_size:
                     centerer = str1, str2
+                    max_size = max(max_size, local)
+                else:
+                    break
 
             self.text = f"{centerer[0]}\n{centerer[1]}"
 
@@ -146,23 +173,24 @@ def overlay_all(txt_imgs, overlay_img, bg_img, bg_location, out=None):
     return out
 
 
-def get_overlay_img():
+def get_overlay_img(filename='bkgrnd.png'):
     try:
-        img = Image.open('bkgrnd.png')
+        img = Image.open(filename)
         return img
     except OSError:
         print("== ERROR ==\nimage not found\n")
         raise
 
 
-#resize image to proper height while maintaining aspect ratio
+# resize image to proper height while maintaining aspect ratio
 def resizer(img):
-    ratio = 720/img.size[1]
+    ratio = 720 / img.size[1]
     return int(ratio * img.size[0])
+
 
 def main():
     # create text data
-    txt_top_img = TxtData("testing", 125, Order.TOP, 7, 10, True)
+    txt_top_img = TxtData("The Legend of Zelda: The Minish Cap", 125, Order.TOP, 7, 10, True)
     # txt_top_img = TxtData("A B C Alphabet!!!!!", 125, Order.TOP, 7, 10, True)
     txt_mid_img = TxtData("hola", 50, Order.MID, 5, 10, True)
     txt_bot_img = TxtData("0:00:00", 125, Order.BOT, 5, 10)
@@ -178,7 +206,7 @@ def main():
 
     # load bg image, if no image exists create black image
     # TODO grab image some other way
-    img_file = 'Untitled.png'
+    img_file = 'test.png'
     # x = urllib.request.urlretrieve("https://www.smashbros.com/assets_v2/img/fighter/ness/main5.png", 'char_left.png')
     # x = urllib.request.urlretrieve("https://www.smashbros.com/assets_v2/img/fighter/wolf/main.png", 'char_right.png')
     try:
@@ -196,7 +224,7 @@ def main():
         finalized = True
 
     out = overlay_all(images, overlay_img, game_img, (250, 0))
-    out.show()
+    # out.show()
     # out.save(fp='./Images/output.png')
 
 
