@@ -1,11 +1,11 @@
-import copy
+from copy import deepcopy
+from re import compile
 import io
 import os
-import re
 import PySimpleGUI as sg
 from PySimpleGUI import ThisRow
 
-from main import *
+from ThumbnailMaker import *
 
 
 def get_fonts():
@@ -29,7 +29,7 @@ def collapse(layout, key):
 
 
 def filenameify(strings):
-    regex = re.compile('[^a-zA-Z0-9]')
+    regex = compile('[^a-zA-Z0-9]')
     output_string = ""
     for s in strings:
         if len(s) > 0:
@@ -121,7 +121,7 @@ except:
     sg.popup_error("Forground image not found")
     overlay_img = Image.new("RGBA", (1280, 720), (0, 0, 0, 0))
 
-overlay_tn = copy.deepcopy(overlay_img)
+overlay_tn = deepcopy(overlay_img)
 overlay_tn = overlay_tn.resize((320, 180))
 bio = io.BytesIO()
 overlay_tn.save(bio, format="PNG")
@@ -370,7 +370,7 @@ while True:
                               alignment=values['-ALIGN3-'],
                               padding=(values['-PAD L-'], values['-PAD U-'], values['-PAD R-'], values['-PAD D-']))
 
-        overlay_tn = copy.deepcopy(overlay_img)
+        overlay_tn = deepcopy(overlay_img)
         txt_top_img.text_shaper(overlay_img)
         txt_bot_img.text_shaper(overlay_img)
         rectangles = (txt_top_img.rectangle, txt_bot_img.rectangle)
@@ -449,7 +449,7 @@ while True:
         try:
             img_file = values['-FG IMAGE-']
             overlay_img = Image.open(img_file)
-            overlay_tn = copy.deepcopy(overlay_img)
+            overlay_tn = deepcopy(overlay_img)
             window['Preview'].click()
         except:
             pass
