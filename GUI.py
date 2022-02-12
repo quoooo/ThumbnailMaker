@@ -4,6 +4,7 @@ import io
 import os
 import PySimpleGUI as sg
 from PySimpleGUI import ThisRow
+from pathlib import Path
 
 from ThumbnailMaker import *
 
@@ -115,6 +116,8 @@ def main():
     SYMBOL_DOWN = '▼'
 
     fonts = get_fonts()
+
+    Path("./Images").mkdir(parents=True, exist_ok=True)
 
     sg.theme('DarkAmber')  # Add a touch of color
     # All the stuff inside your window.
