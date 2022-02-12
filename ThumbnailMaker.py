@@ -20,7 +20,7 @@ class TxtData:
                  stroke_colour=(125, 39, 125), stroke_size=5, alignment=Align.LEFT, padding=(0, 0, 0, 0),
                  location=(0, 0), rectangle=None, image=None):
         # TODO load default data from .json
-        self.text = text
+        self.text = text.strip()
         self.max_txt_size = max_txt_size
         self.order = order
         self.max_size_fraction = max_size_fraction
@@ -62,7 +62,7 @@ class TxtData:
         elif self.alignment == Align.RIGHT.value:
             total_left_padding = canvas_size.size[0] - self.padding_right - w
         elif self.alignment == Align.CENTER.value:
-            total_left_padding = int(canvas_size.size[0]/2) - self.padding_right + self.padding_left - int(w/2)
+            total_left_padding = int((canvas_size.size[0] - self.padding_right + self.padding_left - w)/2)
 
         # get Y coordinate
         total_top_padding = 0
@@ -89,13 +89,13 @@ class TxtData:
         if self.shadow_distance >= 0:
             # draw the shadow
             d.multiline_text((total_left_padding + self.shadow_distance, total_top_padding + self.shadow_distance),
-                             self.text, font=fnt, fill=(0, 0, 0, 75))
+                             self.text, font=fnt, fill=(0, 0, 0, 75), align=self.alignment.lower())
             txt_img = txt_img.filter(ImageFilter.GaussianBlur(6))
 
         # draw the text
         d = ImageDraw.Draw(txt_img)
         d.multiline_text((total_left_padding, total_top_padding), self.text, font=fnt, fill=self.fill_colour,
-                         stroke_width=self.stroke_size, stroke_fill=self.stroke_colour)
+                         stroke_width=self.stroke_size, stroke_fill=self.stroke_colour, align=self.alignment.lower())
 
         self.rectangle = d.textbbox((total_left_padding, total_top_padding), font=fnt, text=self.text)
 
@@ -113,15 +113,17 @@ class TxtData:
                 temp_w = font.getbbox(line)[2]
                 if temp_w > w:
                     w = temp_w
-            if (w > round(canvas_width * self.max_size_fraction / 12) - self.padding_left) \
-                    and self.alignment == Align.LEFT.value:
+            if w > round((canvas_width - self.padding_right - self.padding_left) * self.max_size_fraction / 12):
                 break
-            elif (w > round(canvas_width * self.max_size_fraction / 12) - self.padding_right) \
-                    and self.alignment == Align.RIGHT.value:
-                break
-            elif (w > round(canvas_width * self.max_size_fraction / 12) - self.padding_right - self.padding_left) \
-                    and self.alignment == Align.CENTER.value:
-                break
+            # if (w > round(canvas_width * self.max_size_fraction / 12) - self.padding_left) \
+            #         and self.alignment == Align.LEFT.value:
+            #     break
+            # elif (w > round(canvas_width * self.max_size_fraction / 12) - self.padding_right) \
+            #         and self.alignment == Align.RIGHT.value:
+            #     break
+            # elif (w > round(canvas_width * self.max_size_fraction / 12) - self.padding_right - self.padding_left) \
+            #         and self.alignment == Align.CENTER.value:
+            #     break
             selected_size = new_size
 
         # print(selected_size, text)
@@ -130,12 +132,13 @@ class TxtData:
     def multiliner(self, canvas_width):
         total_width = ImageFont.truetype(self.this_font, self.max_txt_size).getbbox(self.text)[2]
 
-        if self.alignment == Align.LEFT.value:
-            max_width = round(canvas_width * self.max_size_fraction / 12) - self.padding_left
-        elif self.alignment == Align.RIGHT.value:
-            max_width = round(canvas_width * self.max_size_fraction / 12) - self.padding_right
-        else:
-            max_width = round(canvas_width * self.max_size_fraction / 12) - self.padding_left - self.padding_right
+        # if self.alignment == Align.LEFT.value:
+        #     max_width = round(canvas_width * self.max_size_fraction / 12) - self.padding_left
+        # elif self.alignment == Align.RIGHT.value:
+        #     max_width = round(canvas_width * self.max_size_fraction / 12) - self.padding_right
+        # else:
+        max_width = round((canvas_width - self.padding_left - self.padding_right) * self.max_size_fraction / 12)
+            # max_width = round(canvas_width * self.max_size_fraction / 12) - self.padding_left - self.padding_right
 
         if self.multiline and '\n' not in self.text and total_width > max_width:
             wordlist = self.text.split()
@@ -165,7 +168,10 @@ def overlay_all(txt_imgs, overlay_img, bg_img, bg_location, out=None):
         bg_w = resizer(bg_img)
         bg_img = bg_img.resize((bg_w, 720))
         out.paste(bg_img.copy(), bg_location)
-        out.alpha_composite(overlay_img)
+        try:
+            out.alpha_composite(overlay_img)
+        except:
+            out.paste(overlay_img)
 
     for img in txt_imgs:
         out.alpha_composite(img.image)
